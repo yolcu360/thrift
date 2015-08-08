@@ -331,6 +331,20 @@ static void writeDouble(PyObject* outbuf, double dub) {
   writeI64(outbuf, transfer.t);
 }
 
+static int8_t
+serialized_type(TType type)
+{
+  switch (type) {
+  case T_UTF8:
+  case T_UTF16:
+    /* T_UTF8 means the source is Python unicode object, which needs
+       to be UTF8 encoded, but the type tag in the serialized form should
+       still be T_STRING. Ditto for UTF16. */
+    return (int8_t)T_STRING;
+  default:
+    return (int8_t)type;
+  }
+}
 
 /* --- MAIN RECURSIVE OUTPUT FUCNTION -- */
 
@@ -413,7 +427,17 @@ output_val(PyObject* output, PyObject* value, TType type, PyObject* typeargs) {
     break;
   }
 
+  case T_UTF8:
   case T_STRING: {
+    bool is_unicode = (type == T_UTF8 && value->ob_type == &PyUnicode_Type);
+
+    if (is_unicode) {
+      value = PyUnicode_AsUTF8String(value);
+      if (value == NULL) {
+        return false;
+      }
+    }
+
     Py_ssize_t len = PyString_Size(value);
 
     if (!check_ssize_t_32(len)) {
@@ -422,6 +446,11 @@ output_val(PyObject* output, PyObject* value, TType type, PyObject* typeargs) {
 
     writeI32(output, (int32_t) len);
     PycStringIO->cwrite(output, PyString_AsString(value), (int32_t) len);
+
+    if (is_unicode) {
+      Py_DECREF(value);
+    }
+
     break;
   }
 
@@ -442,7 +471,7 @@ output_val(PyObject* output, PyObject* value, TType type, PyObject* typeargs) {
       return false;
     }
 
-    writeByte(output, parsedargs.element_type);
+    writeByte(output, serialized_type(parsedargs.element_type));
     writeI32(output, (int32_t) len);
 
     iterator =  PyObject_GetIter(value);
@@ -484,8 +513,8 @@ output_val(PyObject* output, PyObject* value, TType type, PyObject* typeargs) {
       return false;
     }
 
-    writeByte(output, parsedargs.ktag);
-    writeByte(output, parsedargs.vtag);
+    writeByte(output, serialized_type(parsedargs.ktag));
+    writeByte(output, serialized_type(parsedargs.vtag));
     writeI32(output, len);
 
     // TODO(bmaurer): should support any mapping, not just dicts
@@ -549,7 +578,7 @@ output_val(PyObject* output, PyObject* value, TType type, PyObject* typeargs) {
         continue;
       }
 
-      writeByte(output, (int8_t) parsedspec.type);
+      writeByte(output, serialized_type(parsedspec.type));
       writeI16(output, parsedspec.tag);
 
       if (!output_val(output, instval, parsedspec.type, parsedspec.typeargs)) {
@@ -567,7 +596,6 @@ output_val(PyObject* output, PyObject* value, TType type, PyObject* typeargs) {
   case T_STOP:
   case T_VOID:
   case T_UTF16:
-  case T_UTF8:
   case T_U64:
   default:
     PyErr_SetString(PyExc_TypeError, "Unexpected TType");
@@ -741,7 +769,10 @@ checkTypeByte(DecodeBuffer* input, TType expected) {
     return false;
   }
 
-  if (expected != got) {
+  if (expected != got &&
+      /* T_UTF8 means we should return a Python unicode object,
+  but the type tag in the serialized form should still be T_STRING */
+      !(expected == T_UTF8 && got == T_STRING)) {
     PyErr_SetString(PyExc_TypeError, "got wrong ttype while reading field");
     return false;
   }
@@ -768,6 +799,7 @@ skip(DecodeBuffer* input, TType type) {
   case T_I64:
   case T_DOUBLE: SKIPBYTES(8); break;
 
+  case T_UTF8:
   case T_STRING: {
     // TODO(dreiss): Find out if these check_ssize_t32s are really necessary.
     int len = readI32(input);
@@ -851,7 +883,6 @@ skip(DecodeBuffer* input, TType type) {
   case T_STOP:
   case T_VOID:
   case T_UTF16:
-  case T_UTF8:
   case T_U64:
   default:
     PyErr_SetString(PyExc_TypeError, "Unexpected TType");
@@ -912,7 +943,10 @@ decode_struct(DecodeBuffer* input, PyObject* output, PyObject* spec_seq) {
     if (!parse_struct_item_spec(&parsedspec, item_spec)) {
       return false;
     }
-    if (parsedspec.type != type) {
+    if (parsedspec.type != type &&
+ /* T_UTF8 means we should return a Python unicode object,
+    but the type tag in the serialized form should still be T_STRING */
+       !(parsedspec.type == T_UTF8 && type == T_STRING)) {
       if (!skip(input, type)) {
         PyErr_SetString(PyExc_TypeError, "struct field had wrong type while reading and can't be skipped");
         return false;
@@ -1002,6 +1036,7 @@ decode_val(DecodeBuffer* input, TType type, PyObject* typeargs) {
     return PyFloat_FromDouble(v);
   }
 
+  case T_UTF8:
   case T_STRING: {
     Py_ssize_t len = readI32(input);
     char* buf;
@@ -1009,7 +1044,11 @@ decode_val(DecodeBuffer* input, TType type, PyObject* typeargs) {
       return NULL;
     }
 
-    return PyString_FromStringAndSize(buf, len);
+    if (type == T_STRING) {
+      return PyString_FromStringAndSize(buf, len);
+    } else {
+      return PyUnicode_DecodeUTF8(buf, len, NULL);
+    }
   }
 
   case T_LIST:
@@ -1146,7 +1185,6 @@ decode_val(DecodeBuffer* input, TType type, PyObject* typeargs) {
   case T_STOP:
   case T_VOID:
   case T_UTF16:
-  case T_UTF8:
   case T_U64:
   default:
     PyErr_SetString(PyExc_TypeError, "Unexpected TType");

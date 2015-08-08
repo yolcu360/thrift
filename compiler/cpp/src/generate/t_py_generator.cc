@@ -518,7 +518,11 @@ string t_py_generator::render_const_value(t_type* type, t_const_value* value) {
     t_base_type::t_base tbase = ((t_base_type*)type)->get_base();
     switch (tbase) {
     case t_base_type::TYPE_STRING:
-      out << '"' << get_escaped_string(value) << '"';
+      if (((t_base_type*)type)->is_binary() || !gen_utf8strings_) {
+        out << '"' << get_escaped_string(value) << '"';
+      } else {
+        out << "u\"" << get_escaped_string(value) << '"';
+      }
       break;
     case t_base_type::TYPE_BOOL:
       out << (value->get_integer() > 0 ? "True" : "False");
@@ -2685,7 +2689,11 @@ string t_py_generator::type_to_enum(t_type* type) {
     case t_base_type::TYPE_VOID:
       throw "NO T_VOID CONSTRUCT";
     case t_base_type::TYPE_STRING:
-      return "TType.STRING";
+      if (((t_base_type*)type)->is_binary() || !gen_utf8strings_) {
+        return "TType.STRING";
+      } else {
+        return "TType.UTF8";
+      }
     case t_base_type::TYPE_BOOL:
       return "TType.BOOL";
     case t_base_type::TYPE_BYTE:
