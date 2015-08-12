@@ -52,6 +52,7 @@ CTYPES = {TType.BOOL:       'tf',
           TType.I64:        'i64',
           TType.DOUBLE:     'dbl',
           TType.STRING:     'str',
+          TType.UTF8:       'str',
           TType.STRUCT:     'rec',
           TType.LIST:       'lst',
           TType.SET:        'set',
@@ -226,8 +227,7 @@ class TJSONProtocolBase(TProtocolBase):
         character = self.reader.read()
         if character == ESCSEQ[1]:
           self.readJSONSyntaxChar(ZERO)
-          self.readJSONSyntaxChar(ZERO)
-          character = json.JSONDecoder().decode('"\u00%s"' % self.trans.read(2))
+          character = json.JSONDecoder().decode('"\u0%s"' % self.trans.read(3))
         else:
           off = ESCAPE_CHAR.find(character)
           if off == -1:
@@ -235,7 +235,7 @@ class TJSONProtocolBase(TProtocolBase):
                                      "Expected control char")
           character = ESCAPE_CHAR_VALS[off]
       string.append(character)
-    return ''.join(string)
+    return ''.join(string).encode('utf-8')
 
   def isJSONNumeric(self, character):
     return (True if NUMERIC_CHAR.find(character) != - 1 else False)
