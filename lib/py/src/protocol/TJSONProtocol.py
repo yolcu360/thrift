@@ -40,7 +40,7 @@ QUOTE = '"'
 BACKSLASH = '\\'
 ZERO = '0'
 
-ESCSEQ = '\\u00'
+ESCSEQ = '\\u'
 ESCAPE_CHAR = '"\\bfnrt'
 ESCAPE_CHAR_VALS = ['"', '\\', '\b', '\f', '\n', '\r', '\t']
 NUMERIC_CHAR = '+-.0123456789Ee'
@@ -226,8 +226,18 @@ class TJSONProtocolBase(TProtocolBase):
       if character == ESCSEQ[0]:
         character = self.reader.read()
         if character == ESCSEQ[1]:
-          self.readJSONSyntaxChar(ZERO)
-          character = json.JSONDecoder().decode('"\u0%s"' % self.trans.read(3))
+          unicode_values = []
+          for _ in range(4):
+            next_char = self.reader.read()
+            if next_char == QUOTE:
+              string.append("\u")
+              string += unicode_values
+              return "".join(string).encode("utf-8")
+            else:
+              unicode_values.append(next_char)
+          if len(unicode_values) == 4:
+              unicode_code = '"\u%s"' % "".join(unicode_values)
+              character = json.JSONDecoder().decode(unicode_code)
         else:
           off = ESCAPE_CHAR.find(character)
           if off == -1:
