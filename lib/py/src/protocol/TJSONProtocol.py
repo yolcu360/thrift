@@ -235,9 +235,8 @@ class TJSONProtocolBase(TProtocolBase):
               return "".join(string).encode("utf-8")
             else:
               unicode_values.append(next_char)
-          if len(unicode_values) == 4:
-              unicode_code = '"\u%s"' % "".join(unicode_values)
-              character = json.JSONDecoder().decode(unicode_code)
+          unicode_code = '"\u%s"' % "".join(unicode_values)
+          character = json.JSONDecoder().decode(unicode_code)
         else:
           off = ESCAPE_CHAR.find(character)
           if off == -1:
