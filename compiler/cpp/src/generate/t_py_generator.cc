@@ -373,7 +373,7 @@ void t_py_generator::init_generator() {
   f_consts_ <<
     py_autogen_comment() << endl <<
     py_imports() << endl <<
-    "from ttypes import *" << endl <<
+    "from .ttypes import *" << endl <<
     endl;
 }
 
