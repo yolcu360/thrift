@@ -430,7 +430,7 @@ string t_py_generator::py_autogen_comment() {
  */
 string t_py_generator::py_imports() {
   return
-    string("from thrift.Thrift import TType, TMessageType, TException, TApplicationException");
+    string("from thrift.Thrift import TType, TMessageType, TException, TApplicationException, TEnum");
 }
 
 /**
@@ -462,8 +462,8 @@ void t_py_generator::generate_enum(t_enum* tenum) {
 
   f_types_ <<
     "class " << tenum->get_name() <<
-    (gen_newstyle_ ? "(object)" : "") <<
-    (gen_dynamic_ ? "(" + gen_dynbaseclass_ + ")" : "") <<
+    (gen_newstyle_ ? "(TEnum)" : "") <<
+    (gen_dynamic_ ? "(TEnum, " + gen_dynbaseclass_ + ")" : "") <<
     ":" << endl;
   indent_up();
   generate_python_docstring(f_types_, tenum);
