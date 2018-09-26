@@ -168,3 +168,14 @@ class TApplicationException(TException):
       oprot.writeFieldEnd()
     oprot.writeFieldStop()
     oprot.writeStructEnd()
+
+
+class TEnum(object):
+
+    @classmethod
+    def get_name(cls, value):
+        return cls._VALUES_TO_NAMES[value]
+
+    @classmethod
+    def get_value(cls, name):
+        return cls._NAMES_TO_VALUES[name]
